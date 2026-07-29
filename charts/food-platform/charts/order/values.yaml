@@ -1,0 +1,11 @@
+enabled: true
+replicaCount: 1
+fullnameOverride: ""
+image:
+  repository: food/order
+  tag: ""
+service:
+  type: ClusterIP
+  port: 8080
+env: {}
+resources: {}

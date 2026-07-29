@@ -1,0 +1,31 @@
+apiVersion: v2
+name: food-platform
+description: Umbrella Helm chart for the food delivery platform (7 services + infra)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: infra
+    version: 0.1.0
+    condition: infra.enabled
+  - name: identity
+    version: 0.1.0
+    condition: identity.enabled
+  - name: catalog
+    version: 0.1.0
+    condition: catalog.enabled
+  - name: order
+    version: 0.1.0
+    condition: order.enabled
+  - name: delivery
+    version: 0.1.0
+    condition: delivery.enabled
+  - name: payment
+    version: 0.1.0
+    condition: payment.enabled
+  - name: notification
+    version: 0.1.0
+    condition: notification.enabled
+  - name: gateway
+    version: 0.1.0
+    condition: gateway.enabled

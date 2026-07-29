@@ -1,0 +1,173 @@
+# Shared defaults for all subcharts. Override per environment in values-local.yaml / values-gcp.yaml.
+
+global:
+  imageRegistry: ""
+  imagePullPolicy: IfNotPresent
+  imageTag: local
+  jwtSecret: food-platform-dev-jwt-secret-min-32-chars
+  jwtIssuer: food-identity-service
+
+infra:
+  enabled: true
+  postgresql:
+    image: postgres:16-alpine
+    storageClass: ""
+    storageSize: 1Gi
+    instances:
+      identity:
+        username: identity_admin
+        password: auth_secure_pass_2026
+        database: food_identity_db
+      catalog:
+        username: catalog_admin
+        password: catalog_secure_pass_2026
+        database: food_catalog_db
+      order:
+        username: order_admin
+        password: order_secure_pass_2026
+        database: food_order_db
+      delivery:
+        username: delivery_admin
+        password: delivery_secure_pass_2026
+        database: food_delivery_db
+      payment:
+        username: payment_admin
+        password: payment_secure_pass_2026
+        database: food_payment_db
+      notification:
+        username: notification_admin
+        password: notification_secure_pass_2026
+        database: food_notification_db
+  kafka:
+    enabled: true
+    image: apache/kafka:3.8.1
+    bootstrapServers: kafka:9092
+
+identity:
+  enabled: true
+  fullnameOverride: food-identity-service
+  replicaCount: 1
+  image:
+    repository: food/identity
+    tag: ""
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    SPRING_DATASOURCE_URL: jdbc:postgresql://identity-postgres:5432/food_identity_db
+    SPRING_DATASOURCE_USERNAME: identity_admin
+    SPRING_DATASOURCE_PASSWORD: auth_secure_pass_2026
+    DELIVERY_SERVICE_URL: http://food-delivery-service:8084
+    BOOTSTRAP_ADMIN_ENABLED: "true"
+    BOOTSTRAP_ADMIN_EMAIL: admin@foodplatform.com
+    BOOTSTRAP_ADMIN_PASSWORD: Admin@123
+  resources: {}
+
+catalog:
+  enabled: true
+  fullnameOverride: food-catalog-service
+  replicaCount: 1
+  image:
+    repository: food/catalog
+    tag: ""
+  service:
+    type: ClusterIP
+    port: 8082
+  env:
+    SPRING_DATASOURCE_URL: jdbc:postgresql://catalog-postgres:5432/food_catalog_db
+    SPRING_DATASOURCE_USERNAME: catalog_admin
+    SPRING_DATASOURCE_PASSWORD: catalog_secure_pass_2026
+  resources: {}
+
+order:
+  enabled: true
+  fullnameOverride: food-order-service
+  replicaCount: 1
+  image:
+    repository: food/order
+    tag: ""
+  service:
+    type: ClusterIP
+    port: 8083
+  env:
+    SPRING_DATASOURCE_URL: jdbc:postgresql://order-postgres:5432/food_order_db
+    SPRING_DATASOURCE_USERNAME: order_admin
+    SPRING_DATASOURCE_PASSWORD: order_secure_pass_2026
+    SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  resources: {}
+
+delivery:
+  enabled: true
+  fullnameOverride: food-delivery-service
+  replicaCount: 1
+  image:
+    repository: food/delivery
+    tag: ""
+  service:
+    type: ClusterIP
+    port: 8084
+  env:
+    SPRING_DATASOURCE_URL: jdbc:postgresql://delivery-postgres:5432/food_delivery_db
+    SPRING_DATASOURCE_USERNAME: delivery_admin
+    SPRING_DATASOURCE_PASSWORD: delivery_secure_pass_2026
+    SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  resources: {}
+
+payment:
+  enabled: true
+  fullnameOverride: food-payment-service
+  replicaCount: 1
+  image:
+    repository: food/payment
+    tag: ""
+  service:
+    type: ClusterIP
+    port: 8085
+  env:
+    SPRING_DATASOURCE_URL: jdbc:postgresql://payment-postgres:5432/food_payment_db
+    SPRING_DATASOURCE_USERNAME: payment_admin
+    SPRING_DATASOURCE_PASSWORD: payment_secure_pass_2026
+    SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  resources: {}
+
+notification:
+  enabled: true
+  fullnameOverride: food-notification-service
+  replicaCount: 1
+  image:
+    repository: food/notification
+    tag: ""
+  service:
+    type: ClusterIP
+    port: 8086
+  env:
+    SPRING_DATASOURCE_URL: jdbc:postgresql://notification-postgres:5432/food_notification_db
+    SPRING_DATASOURCE_USERNAME: notification_admin
+    SPRING_DATASOURCE_PASSWORD: notification_secure_pass_2026
+    SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  resources: {}
+
+gateway:
+  enabled: true
+  fullnameOverride: food-api-gateway
+  replicaCount: 1
+  image:
+    repository: food/gateway
+    tag: ""
+  service:
+    type: ClusterIP
+    port: 8090
+  ingress:
+    enabled: false
+    className: ""
+    host: localhost
+    annotations: {}
+  env:
+    GATEWAY_PUBLIC_URL: http://localhost:8090
+    IDENTITY_SERVICE_URL: http://food-identity-service:8080
+    CATALOG_SERVICE_URL: http://food-catalog-service:8082
+    ORDER_SERVICE_URL: http://food-order-service:8083
+    DELIVERY_SERVICE_URL: http://food-delivery-service:8084
+    PAYMENT_SERVICE_URL: http://food-payment-service:8085
+    NOTIFICATION_SERVICE_URL: http://food-notification-service:8086
+  resources: {}

@@ -1,0 +1,16 @@
+enabled: true
+replicaCount: 1
+fullnameOverride: ""
+image:
+  repository: food/gateway
+  tag: ""
+service:
+  type: ClusterIP
+  port: 8090
+env: {}
+resources: {}
+ingress:
+  enabled: false
+  className: ""
+  host: localhost
+  annotations: {}

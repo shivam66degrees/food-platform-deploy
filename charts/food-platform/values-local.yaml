@@ -1,0 +1,16 @@
+# Rancher Desktop / local Kubernetes overrides (Phase 4)
+# Use with: helm upgrade --install food-platform ./charts/food-platform -f ./charts/food-platform/values-local.yaml
+
+global:
+  imagePullPolicy: IfNotPresent
+  imageTag: local
+
+gateway:
+  ingress:
+    enabled: true
+    className: traefik
+    host: localhost
+
+infra:
+  postgresql:
+    storageSize: 2Gi

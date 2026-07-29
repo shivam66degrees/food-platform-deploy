@@ -1,0 +1,12 @@
+enabled: true
+
+postgresql:
+  image: postgres:16-alpine
+  storageClass: ""
+  storageSize: 1Gi
+  instances: {}
+
+kafka:
+  enabled: true
+  image: apache/kafka:3.8.1
+  bootstrapServers: kafka:9092

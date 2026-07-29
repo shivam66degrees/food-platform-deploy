@@ -1,0 +1,89 @@
+{{- if .Values.enabled }}
+{{- range $name, $cfg := .Values.postgresql.instances }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-postgres
+  labels:
+    app.kubernetes.io/name: {{ $name }}-postgres
+    app.kubernetes.io/component: postgresql
+    {{- include "infra.labels" $ | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: postgres
+      name: postgres
+  selector:
+    app.kubernetes.io/name: {{ $name }}-postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}-postgres
+  labels:
+    app.kubernetes.io/name: {{ $name }}-postgres
+    app.kubernetes.io/component: postgresql
+    {{- include "infra.labels" $ | nindent 4 }}
+spec:
+  serviceName: {{ $name }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}-postgres
+        app.kubernetes.io/component: postgresql
+    spec:
+      containers:
+        - name: postgres
+          image: {{ $.Values.postgresql.image | quote }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ $cfg.username | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ $cfg.password | quote }}
+            - name: POSTGRES_DB
+              value: {{ $cfg.database | quote }}
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ $cfg.username }}
+                - -d
+                - {{ $cfg.database }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ $cfg.username }}
+                - -d
+                - {{ $cfg.database }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if $.Values.postgresql.storageClass }}
+        storageClassName: {{ $.Values.postgresql.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $.Values.postgresql.storageSize | quote }}
+{{- end }}
+{{- end }}
