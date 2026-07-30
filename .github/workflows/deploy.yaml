@@ -1,0 +1,221 @@
+name: CD
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'charts/**'
+      - 'scripts/**'
+      - '.github/workflows/deploy.yaml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'charts/**'
+      - 'scripts/**'
+      - '.github/workflows/deploy.yaml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deploy target
+        required: true
+        default: local-k8s
+        type: choice
+        options:
+          - gke
+          - local-k8s
+      image_tag:
+        description: Image tag (use `latest` for auto CD from service CI)
+        required: true
+        default: latest
+        type: string
+      image_registry:
+        description: Registry prefix (GHCR owner root, e.g. ghcr.io/myorg)
+        required: false
+        type: string
+      helm_values:
+        description: Values file path relative to charts/food-platform/
+        required: false
+        default: values-cd-ghcr.yaml
+        type: string
+      skip_verify:
+        description: Skip post-deploy health checks
+        required: false
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [deploy-platform]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  HELM_VERSION: "3.16.4"
+  NAMESPACE: food-platform
+  RELEASE: food-platform
+
+concurrency:
+  group: food-platform-deploy
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Build chart dependencies
+        run: helm dependency build charts/food-platform
+
+      - name: Lint (local values)
+        run: helm lint charts/food-platform -f charts/food-platform/values-local.yaml
+
+      - name: Lint (CD / GHCR values)
+        run: helm lint charts/food-platform -f charts/food-platform/values-cd-ghcr.yaml
+
+      - name: Template dry-run (local)
+        run: |
+          helm template food-platform charts/food-platform \
+            -f charts/food-platform/values-local.yaml \
+            --namespace food-platform \
+            --set global.imageTag=ci-test \
+            > /dev/null
+
+      - name: Template dry-run (GHCR)
+        run: |
+          helm template food-platform charts/food-platform \
+            -f charts/food-platform/values-cd-ghcr.yaml \
+            --namespace food-platform \
+            --set global.imageRegistry=ghcr.io/example \
+            --set global.imageTag=ci-test \
+            > /dev/null
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: validate
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'repository_dispatch'
+    runs-on: ${{ ((github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'local-k8s') || (github.event_name == 'repository_dispatch' && github.event.client_payload.environment == 'local-k8s')) && fromJSON('["self-hosted", "macOS"]') || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Resolve deploy parameters
+        id: params
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "image_tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+            REG="${{ github.event.inputs.image_registry }}"
+            if [[ -z "$REG" ]]; then
+              REG="ghcr.io/${{ github.repository_owner }}"
+            fi
+            echo "image_registry=$REG" >> "$GITHUB_OUTPUT"
+            echo "values_file=charts/food-platform/${{ github.event.inputs.helm_values }}" >> "$GITHUB_OUTPUT"
+            echo "skip_verify=${{ github.event.inputs.skip_verify }}" >> "$GITHUB_OUTPUT"
+            echo "target=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG="${{ github.event.client_payload.image_tag }}"
+            REG="${{ github.event.client_payload.image_registry }}"
+            TARGET="${{ github.event.client_payload.environment }}"
+            if [[ -z "$TAG" ]]; then
+              echo "ERROR: repository_dispatch requires client_payload.image_tag" >&2
+              exit 1
+            fi
+            if [[ -z "$REG" ]]; then
+              REG="ghcr.io/${{ github.repository_owner }}"
+            fi
+            if [[ -z "$TARGET" ]]; then
+              TARGET="gke"
+            fi
+            echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "image_registry=$REG" >> "$GITHUB_OUTPUT"
+            echo "values_file=charts/food-platform/values-cd-ghcr.yaml" >> "$GITHUB_OUTPUT"
+            echo "skip_verify=false" >> "$GITHUB_OUTPUT"
+            echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+            echo "triggered_by=${{ github.event.client_payload.triggered_by }}" >> "$GITHUB_OUTPUT"
+            echo "triggered_sha=${{ github.event.client_payload.triggered_sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify Rancher Desktop Kubernetes
+        if: steps.params.outputs.target == 'local-k8s'
+        run: |
+          echo "Runner: $(hostname) ($(uname -m))"
+          echo "kubectl: $(command -v kubectl)"
+          echo "helm: $(command -v helm)"
+          ctx="$(kubectl config current-context)"
+          echo "Kubernetes context: $ctx"
+          if [[ "$ctx" != "rancher-desktop" ]]; then
+            echo "ERROR: Expected kubectl context 'rancher-desktop' (got '$ctx')." >&2
+            echo "On the self-hosted runner machine run: kubectl config use-context rancher-desktop" >&2
+            exit 1
+          fi
+          kubectl cluster-info
+          kubectl get nodes -o wide
+
+      - name: Authenticate to Google Cloud (GKE)
+        if: steps.params.outputs.target == 'gke'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
+
+      - name: Get GKE credentials
+        if: steps.params.outputs.target == 'gke'
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER }}
+          location: ${{ secrets.GKE_REGION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Create GHCR pull secret (optional)
+        if: secrets.GHCR_PULL_TOKEN != ''
+        env:
+          GHCR_USER: ${{ secrets.GHCR_PULL_USER }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          kubectl create namespace "${{ env.NAMESPACE }}" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret docker-registry ghcr-pull \
+            --namespace "${{ env.NAMESPACE }}" \
+            --docker-server=ghcr.io \
+            --docker-username="$GHCR_USER" \
+            --docker-password="$GHCR_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm deploy
+        env:
+          IMAGE_REGISTRY: ${{ steps.params.outputs.image_registry }}
+          IMAGE_TAG: ${{ steps.params.outputs.image_tag }}
+          HELM_VALUES: ${{ steps.params.outputs.values_file }}
+          HELM_NAMESPACE: ${{ env.NAMESPACE }}
+          HELM_RELEASE: ${{ env.RELEASE }}
+        run: |
+          DEPLOY_ARGS=(
+            --values "$HELM_VALUES"
+            --image-registry "$IMAGE_REGISTRY"
+            --image-tag "$IMAGE_TAG"
+          )
+          if [[ "${{ steps.params.outputs.skip_verify }}" == "true" ]]; then
+            DEPLOY_ARGS+=(--skip-verify)
+          fi
+          if [[ -n "${{ secrets.GHCR_PULL_TOKEN }}" ]]; then
+            DEPLOY_ARGS+=(--set "global.imagePullSecrets[0].name=ghcr-pull")
+          fi
+          bash scripts/helm-deploy.sh "${DEPLOY_ARGS[@]}"
+
+      - name: Deployment summary
+        run: |
+          echo "### Deployed food-platform" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag:** \`${{ steps.params.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Registry:** \`${{ steps.params.outputs.image_registry }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Namespace:** \`${{ env.NAMESPACE }}\`" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "${{ steps.params.outputs.triggered_by }}" ]]; then
+            echo "- **Triggered by:** \`${{ steps.params.outputs.triggered_by }}\` @ \`${{ steps.params.outputs.triggered_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi

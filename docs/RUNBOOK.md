@@ -89,13 +89,33 @@ curl -s http://localhost/swagger-ui.html -o /dev/null -w "%{http_code}\n"
 ## 6. Upgrade / rollback
 
 ```bash
-# Re-deploy after chart or values change
+# Re-deploy after chart or values change (local images)
 ./scripts/local-deploy.sh --skip-build
+
+# Re-deploy from GHCR (after service CI pushed images)
+IMAGE_REGISTRY=ghcr.io/<owner> IMAGE_TAG=<git-sha> \
+  ./scripts/helm-deploy.sh --values charts/food-platform/values-cd-ghcr.yaml \
+  --image-registry "$IMAGE_REGISTRY" --image-tag "$IMAGE_TAG"
 
 # Helm rollback
 helm history food-platform -n food-platform
 helm rollback food-platform <revision> -n food-platform
 ```
+
+### CD workflow (GitHub Actions)
+
+Workflow: `.github/workflows/deploy.yaml`
+
+| Trigger | Behavior |
+|---------|----------|
+| PR / push to chart paths | `helm lint` + template validation only |
+| **workflow_dispatch** | Deploy to GKE (`environment: gke`) or local K8s (`local-k8s` + self-hosted runner) |
+| **repository_dispatch** | Deploy with `client_payload.image_tag` (optional CI hook from service repos) |
+
+GKE secrets: `GCP_PROJECT_ID`, `GKE_CLUSTER`, `GKE_REGION`, `GCP_SA_KEY_JSON`.  
+Optional private GHCR: `GHCR_PULL_USER`, `GHCR_PULL_TOKEN`.
+
+**Rancher (local-k8s):** see [SELF_HOSTED_RUNNER.md](./SELF_HOSTED_RUNNER.md).
 
 ---
 

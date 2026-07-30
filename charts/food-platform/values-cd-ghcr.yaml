@@ -1,0 +1,18 @@
+# CD overlay — pull images from GHCR (Phase 6 CI output).
+# Used with:
+#   --set global.imageRegistry=ghcr.io/<owner>
+#   --set global.imageTag=<git-sha>
+#
+# CI publishes: ghcr.io/<owner>/food/identity:<sha> … food/gateway:<sha>
+# Helm repos in values.yaml are food/identity, food/catalog, … (see app.image helper).
+
+global:
+  imagePullPolicy: Always
+  # imageRegistry + imageTag supplied by helm-deploy.sh / CD workflow
+  # Uncomment when GHCR packages are private:
+  # imagePullSecrets:
+  #   - name: ghcr-pull
+
+gateway:
+  env:
+    GATEWAY_PUBLIC_URL: http://localhost
