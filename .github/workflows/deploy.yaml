@@ -176,11 +176,14 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Create GHCR pull secret (optional)
-        if: secrets.GHCR_PULL_TOKEN != ''
         env:
           GHCR_USER: ${{ secrets.GHCR_PULL_USER }}
           GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
         run: |
+          if [[ -z "${GHCR_TOKEN:-}" ]]; then
+            echo "GHCR_PULL_TOKEN not set — skipping pull secret (use public GHCR packages)."
+            exit 0
+          fi
           kubectl create namespace "${{ env.NAMESPACE }}" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret docker-registry ghcr-pull \
             --namespace "${{ env.NAMESPACE }}" \
@@ -196,6 +199,7 @@ jobs:
           HELM_VALUES: ${{ steps.params.outputs.values_file }}
           HELM_NAMESPACE: ${{ env.NAMESPACE }}
           HELM_RELEASE: ${{ env.RELEASE }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
         run: |
           DEPLOY_ARGS=(
             --values "$HELM_VALUES"
@@ -205,7 +209,7 @@ jobs:
           if [[ "${{ steps.params.outputs.skip_verify }}" == "true" ]]; then
             DEPLOY_ARGS+=(--skip-verify)
           fi
-          if [[ -n "${{ secrets.GHCR_PULL_TOKEN }}" ]]; then
+          if [[ -n "${GHCR_PULL_TOKEN:-}" ]]; then
             DEPLOY_ARGS+=(--set "global.imagePullSecrets[0].name=ghcr-pull")
           fi
           bash scripts/helm-deploy.sh "${DEPLOY_ARGS[@]}"
