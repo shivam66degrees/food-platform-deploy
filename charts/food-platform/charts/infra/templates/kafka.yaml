@@ -47,15 +47,17 @@ spec:
             - name: KAFKA_PROCESS_ROLES
               value: broker,controller
             - name: KAFKA_LISTENERS
-              value: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+              value: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,INTERNAL://0.0.0.0:29092
             - name: KAFKA_ADVERTISED_LISTENERS
-              value: PLAINTEXT://kafka:9092
+              value: PLAINTEXT://kafka:9092,INTERNAL://kafka:29092
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
               value: CONTROLLER
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-              value: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+              value: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: INTERNAL
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: 1@127.0.0.1:9093
+              value: 1@localhost:9093
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: "1"
             - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
@@ -64,16 +66,20 @@ spec:
               value: "1"
             - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
               value: "0"
+          startupProbe:
+            tcpSocket:
+              port: kafka
+            failureThreshold: 30
+            periodSeconds: 10
           readinessProbe:
             tcpSocket:
               port: kafka
-            initialDelaySeconds: 20
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
               port: kafka
-            initialDelaySeconds: 60
             periodSeconds: 20
+            failureThreshold: 3
 ---
 apiVersion: batch/v1
 kind: Job

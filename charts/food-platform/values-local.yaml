@@ -1,15 +1,65 @@
-# Rancher Desktop / local Kubernetes overrides (Phase 4)
+# Rancher Desktop / local Kubernetes overrides (Phase 4–5)
 # Use with: helm upgrade --install food-platform ./charts/food-platform -f ./charts/food-platform/values-local.yaml
+#
+# Tip: allocate at least 8–12 GB RAM to Rancher Desktop before a full deploy.
 
 global:
   imagePullPolicy: IfNotPresent
   imageTag: local
+  javaToolOptions: "-XX:MaxRAMPercentage=50.0 -Xmx384m"
 
 gateway:
   ingress:
     enabled: true
     className: traefik
     host: localhost
+  resources:
+    requests:
+      memory: 384Mi
+    limits:
+      memory: 512Mi
+
+identity:
+  resources:
+    requests:
+      memory: 384Mi
+    limits:
+      memory: 512Mi
+
+catalog:
+  resources:
+    requests:
+      memory: 384Mi
+    limits:
+      memory: 512Mi
+
+order:
+  resources:
+    requests:
+      memory: 384Mi
+    limits:
+      memory: 512Mi
+
+delivery:
+  resources:
+    requests:
+      memory: 384Mi
+    limits:
+      memory: 512Mi
+
+payment:
+  resources:
+    requests:
+      memory: 384Mi
+    limits:
+      memory: 512Mi
+
+notification:
+  resources:
+    requests:
+      memory: 384Mi
+    limits:
+      memory: 512Mi
 
 infra:
   postgresql:
