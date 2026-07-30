@@ -13,6 +13,8 @@ gateway:
     enabled: true
     className: traefik
     host: localhost
+  env:
+    GATEWAY_PUBLIC_URL: http://localhost
   resources:
     requests:
       memory: 384Mi
