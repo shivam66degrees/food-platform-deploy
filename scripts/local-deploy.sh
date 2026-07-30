@@ -74,6 +74,12 @@ helm upgrade --install "$RELEASE" "$CHART_DIR" \
   --wait \
   --timeout "$TIMEOUT" || DEPLOY_EXIT=$?
 
+if [[ "${DEPLOY_EXIT:-0}" -eq 0 ]]; then
+  echo ""
+  bash "$SCRIPT_DIR/verify-k8s-health.sh" --namespace "$NAMESPACE" --check-ingress \
+    --ingress-url "${INGRESS_URL:-http://localhost}" || true
+fi
+
 echo ""
 echo "==> Workloads"
 kubectl get pods,svc,ingress -n "$NAMESPACE"
