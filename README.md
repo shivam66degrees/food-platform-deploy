@@ -9,6 +9,7 @@ charts/food-platform/          Umbrella chart
 ├── Chart.yaml
 ├── values.yaml                Shared defaults
 ├── values-local.yaml          Rancher Desktop / local K8s
+├── values-gcp.yaml            GKE stub (Artifact Registry, managed ingress)
 ├── templates/                 Platform-wide resources (JWT secret)
 └── charts/                    Subcharts
     ├── infra/                 Postgres (×6) + Kafka + topic init job
@@ -83,6 +84,20 @@ helm dependency build
 helm lint . -f values-local.yaml
 helm template food-platform . -f values-local.yaml --namespace food-platform
 ```
+
+## GCP deploy (Phase 7 — stub)
+
+Edit placeholders in `charts/food-platform/values-gcp.yaml` (`REPLACE_GCP_PROJECT`, domain, secrets), then:
+
+```bash
+gcloud container clusters get-credentials CLUSTER --region REGION --project PROJECT_ID
+helm upgrade --install food-platform ./charts/food-platform \
+  -f ./charts/food-platform/values-gcp.yaml \
+  --namespace food-platform --create-namespace \
+  --set global.imageTag=<git-sha>
+```
+
+Images: `us-central1-docker.pkg.dev/<project>/food/<service>:<tag>` (or GHCR — see comments in values file).
 
 ## Environment
 

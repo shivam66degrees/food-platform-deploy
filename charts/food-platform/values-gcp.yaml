@@ -1,0 +1,136 @@
+# GKE / GCP values overlay (Phase 7 — stub)
+#
+# Replace placeholders before deploy. Same umbrella chart as values-local.yaml.
+#
+#   gcloud container clusters get-credentials CLUSTER --region REGION --project PROJECT_ID
+#   helm upgrade --install food-platform ./charts/food-platform \
+#     -f ./charts/food-platform/values-gcp.yaml \
+#     --namespace food-platform --create-namespace \
+#     --set global.imageTag=<git-sha>
+#
+# Image sources (pick one when wiring CD):
+#   - Artifact Registry (GCP-native): set global.imageRegistry below
+#   - GHCR (Phase 6 CI): e.g. ghcr.io/<owner> with repository food/<service>
+#
+# Postgres: in-cluster for initial GCP parity (Cloud SQL migration = values-only change later).
+
+global:
+  imageRegistry: us-central1-docker.pkg.dev/REPLACE_GCP_PROJECT/food
+  imagePullPolicy: Always
+  imageTag: latest   # pin to git SHA in CD, e.g. --set global.imageTag=$GITHUB_SHA
+  javaToolOptions: "-XX:MaxRAMPercentage=70.0 -Xmx512m"
+  # Uncomment when pulling from private Artifact Registry / GHCR:
+  # imagePullSecrets:
+  #   - name: gcp-artifact-registry
+  jwtSecret: REPLACE_WITH_K8S_SECRET_OR_EXTERNAL_SECRETS
+
+infra:
+  postgresql:
+    storageClass: standard-rwo
+    storageSize: 10Gi
+
+identity:
+  replicaCount: 2
+  image:
+    repository: identity
+    tag: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 768Mi
+
+catalog:
+  replicaCount: 2
+  image:
+    repository: catalog
+    tag: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 768Mi
+
+order:
+  replicaCount: 2
+  image:
+    repository: order
+    tag: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 768Mi
+
+delivery:
+  replicaCount: 2
+  image:
+    repository: delivery
+    tag: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 768Mi
+
+payment:
+  replicaCount: 2
+  image:
+    repository: payment
+    tag: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 768Mi
+
+notification:
+  replicaCount: 2
+  image:
+    repository: notification
+    tag: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 768Mi
+
+gateway:
+  replicaCount: 2
+  image:
+    repository: gateway
+    tag: ""
+  ingress:
+    enabled: true
+    className: gce
+    host: api.REPLACE_DOMAIN.example
+    annotations:
+      kubernetes.io/ingress.class: gce
+      networking.gke.io/managed-certificates: food-platform-gw-cert
+      # kubernetes.io/ingress.global-static-ip-name: food-platform-ip
+  env:
+    GATEWAY_PUBLIC_URL: https://api.REPLACE_DOMAIN.example
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 768Mi
+
+# --- Optional: Cloud SQL (future — disable in-cluster Postgres per service) ---
+# identity:
+#   env:
+#     SPRING_DATASOURCE_URL: jdbc:postgresql:///food_identity_db?cloudSqlInstance=PROJECT:REGION:INSTANCE&socketFactory=com.google.cloud.sql.postgres.SocketFactory
+#
+# --- Optional: GHCR instead of Artifact Registry ---
+# global:
+#   imageRegistry: ghcr.io/REPLACE_GITHUB_OWNER
+# identity:
+#   image:
+#     repository: food/identity
